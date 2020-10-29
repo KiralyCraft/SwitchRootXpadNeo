@@ -84,10 +84,10 @@ cp arch/arm64/configs/tegra_linux_defconfig .config
 #PREPARE THE KERNEL
 make olddefconfig
 make prepare
-ARCH=arm64 make -j5 tegra-dtstree="../hardware/nvidia"
+#ARCH=arm64 make -j5 tegra-dtstree="../hardware/nvidia" //Do not build the kernel
 
 
-cd ..
+cd ../../ 
 git clone https://github.com/atar-axis/xpadneo.git
 cd xpadneo
 git checkout d55e6d42ecb53f3ebe91e7a43574c35e79146dfd
@@ -96,7 +96,8 @@ cd hid-xpadneo
 #Patch xpadneo generic installer
 echo "$(tail -n +2 Makefile)" > Makefile
 ( echo "KERNEL_SOURCE_DIR := $KERNEL_DIR" && cat Makefile ) > Makefile2 && mv Makefile2 Makefile
-make -j4
+sudo make modules && sudo make modules_install
+
 
 depmod
 sudo rmmod hid-xpadneo || true
