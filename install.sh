@@ -88,7 +88,6 @@ ARCH=arm64 make -j5 tegra-dtstree="../hardware/nvidia"
 
 
 cd ..
-mkdir xpadneo
 git clone https://github.com/atar-axis/xpadneo.git
 cd xpadneo
 git checkout d55e6d42ecb53f3ebe91e7a43574c35e79146dfd
