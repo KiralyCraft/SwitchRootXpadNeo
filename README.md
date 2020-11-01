@@ -5,3 +5,5 @@ The driver may install itself under /lib/modules/4.9.140 instead of /lib/modules
 
 Remember to disable ERTM to pair Xbox One controllers!
 See this: https://gist.github.com/2E0PGS/0166ffec16b1d86acb4ebeea6871b54e
+
+Inspired by: https://gitlab.com/switchroot/kernel/l4t-kernel-build-scripts/tree/test
