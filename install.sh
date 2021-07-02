@@ -1,107 +1,74 @@
 #!/bin/bash
+set -e
 
-#PREPARING THE KERNEL SOURCES
+# Build variables
+export KBUILD_BUILD_USER=${KBUILD_BUILD_USER:-"user"}
+export KBUILD_BUILD_HOST=${KBUILD_BUILD_HOST:-"custombuild"}
+export ARCH=${ARCH:-"arm64"}
+if [[ `uname -m` != aarch64 ]]; then
+	export CROSS_COMPILE=${CROSS_COMPILE:-"aarch64-linux-gnu-"}
+fi
+export CPUS=${CPUS:-$(($(getconf _NPROCESSORS_ONLN) - 1))}
+export KERNEL_VER=${KERNEL_VER:-"linux-3.3.1"}
 
-KERNEL_DIR=$(pwd)"/kernel_r32/kernel-4.9"
-CURPWD=$(pwd)
+# Retrieve last argument as output directory
+CWD="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
+KERNEL_DIR="${CWD}/kernel"
 
-#Handle Standard Kernel Bits
-echo "Extracting and Patching L4T-Switch 4.9"
-mkdir -p kernel_r32
-mv ./l4t-kernel-4.9 $KERNEL_DIR
-cd $KERNEL_DIR
-#put patch files for kernel repo after this line
-cd $CURPWD
-echo "Done"
+create_update_modules() {
+	find "$1" -type d -exec chmod 755 {} \;
+	find "$1" -type f -exec chmod 644 {} \;
+	find "$1" -name "*.sh" -type f -exec chmod 755 {} \;
+	fakeroot chown -R root:root "$1"
+	tar -C "$1" -czvpf "$2" .
+}
 
-#Handle Nvidia Kernel bits
-echo "Extracting Nvidia Kernel Stuff"
-mkdir -p ./kernel_r32/nvidia
-mv ./l4t-kernel-nvidia*/* ./kernel_r32/nvidia
-rm -r ./l4t-kernel-nvidia*
-echo "Done"
+Prepare() {
+	if [[ -z `ls -A ${KERNEL_DIR}/kernel-4.9` ]]; then
+		git clone -b "${KERNEL_VER}" https://gitlab.com/l4t-community/l4t-kernel-4.9 "${KERNEL_DIR}/kernel-4.9" --depth 1
+	fi
+}
 
-#Handle Switchroot DTS files
-echo "Extracting DTS stuff"
-mkdir -p ./kernel_r32/hardware/nvidia/platform/t210/icosa
-cd l4t-platform-t210-switch
-cd $CURPWD
-mv ./l4t-platform-t210-switch*/* ./kernel_r32/hardware/nvidia/platform/t210/icosa/
-rm -r ./l4t-platform-t210-switch*
-echo "Done"
+Build() {
+	echo "Preparing Source and Creating Defconfig"
 
-#Extract and place nvidia bits
-echo "Extracting Nvidia GPU Kernel Bits"
-mkdir -p ./kernel_r32/nvgpu
-mkdir linux-nvgpu
-tar -xf "./linux-nvgpu-r32.2.2.tar.gz" -C linux-nvgpu --strip 1
-rm "./linux-nvgpu-r32.2.2.tar.gz"
-mv ./linux-nvgpu/* ./kernel_r32/nvgpu
-rm -r linux-nvgpu
-echo "Done"
+	cd "${KERNEL_DIR}/kernel-4.9"
+	
+	# Copy kernel defconfig
+	cp arch/arm64/configs/tegra_linux_defconfig .config
 
-echo "Extracting Tegra SOC Data"
-mkdir -p ./kernel_r32/hardware/nvidia/soc/tegra/
-mkdir soc-tegra
-tar -xf "./soc-tegra-rel32.2.2.tar.gz" -C soc-tegra --strip 1
-rm "./soc-tegra-rel32.2.2.tar.gz"
-mv ./soc-tegra/* ./kernel_r32/hardware/nvidia/soc/tegra/
-rm -r soc-tegra
-echo "Done"
+	# Prepare Linux sources
+	make olddefconfig
+	make prepare
+	make modules_prepare
+	
+	
+	cd $CWD
+	git clone https://github.com/atar-axis/xpadneo.git
+	cd xpadneo
+	git checkout d55e6d42ecb53f3ebe91e7a43574c35e79146dfd
+	cd hid-xpadneo
 
-echo "Extracting T210 SOC Data"
-mkdir -p ./kernel_r32/hardware/nvidia/soc/t210/
-mkdir soc-tegra-t210
-tar -xf "soc-tegra-t210-rel32.2.2.tar.gz" -C soc-tegra-t210 --strip 1
-rm "soc-tegra-t210-rel32.2.2.tar.gz"
-mv ./soc-tegra-t210/* ./kernel_r32/hardware/nvidia/soc/t210/
-rm -r soc-tegra-t210
-echo "Done"
-
-echo "Extracting Tegra Common Platform Data"
-mkdir -p ./kernel_r32/hardware/nvidia/platform/tegra/common/
-mkdir platform-tegra-common
-tar -xf "platform-tegra-common-rel32.2.2.tar.gz" -C platform-tegra-common --strip 1
-rm "platform-tegra-common-rel32.2.2.tar.gz"
-mv ./platform-tegra-common/* ./kernel_r32/hardware/nvidia/platform/tegra/common/
-rm -r platform-tegra-common
-echo "Done"
-
-echo "Extracting T210 Common Platform Data"
-mkdir -p ./kernel_r32/hardware/nvidia/platform/t210/common/
-mkdir common-t210
-tar -xf "platform-tegra-t210-common-rel32.2.2.tar.gz" -C common-t210 --strip 1
-rm "platform-tegra-t210-common-rel32.2.2.tar.gz"
-mv ./common-t210/* ./kernel_r32/hardware/nvidia/platform/t210/common/
-rm -r common-t210
-echo "Done"
-
-echo "Preparing Source and Creating Defconfig"
-cd $KERNEL_DIR
-cp arch/arm64/configs/tegra_linux_defconfig .config
+	#Patch xpadneo generic installer
+	echo "$(tail -n +2 Makefile)" > Makefile
+	( echo "KERNEL_SOURCE_DIR := ${KERNEL_DIR}/kernel-4.9" && cat Makefile ) > Makefile2 && mv Makefile2 Makefile
+	sudo make modules && sudo make modules_install
 
 
-#PREPARE THE KERNEL
-make olddefconfig
-make prepare
-#ARCH=arm64 make -j5 tegra-dtstree="../hardware/nvidia" //Do not build the kernel
+	depmod
+	sudo rmmod hid-xpadneo || true
+
+	sudo cp ./etc-udev-rules.d/98-xpadneo.rules /etc/udev/rules.d/
+	sudo cp ./etc-modprobe.d/xpadneo.conf /etc/modprobe.d/
+	modprobe hid-xpadneo
+	
+	if lsmod | grep -i hid_xpadneo -q; then
+        echo "All good, seems to be working!"
+	else
+        echo "Something didn't go right!"
+    fi
+}
 
 
-cd ../../ 
-git clone https://github.com/atar-axis/xpadneo.git
-cd xpadneo
-git checkout d55e6d42ecb53f3ebe91e7a43574c35e79146dfd
-cd hid-xpadneo
-
-#Patch xpadneo generic installer
-echo "$(tail -n +2 Makefile)" > Makefile
-( echo "KERNEL_SOURCE_DIR := $KERNEL_DIR" && cat Makefile ) > Makefile2 && mv Makefile2 Makefile
-sudo make modules && sudo make modules_install
-
-
-depmod
-sudo rmmod hid-xpadneo || true
-
-sudo cp ./etc-udev-rules.d/98-xpadneo.rules /etc/udev/rules.d/
-sudo cp ./etc-modprobe.d/xpadneo.conf /etc/modprobe.d/
-modprobe hid-xpadneo
+Prepare
+Build

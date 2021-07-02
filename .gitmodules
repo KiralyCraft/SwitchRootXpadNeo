@@ -1,3 +1,0 @@
-[submodule "l4t-kernel-4.9"]
-	path = l4t-kernel-4.9
-	url = https://gitlab.com/switchroot/l4t-kernel-4.9.git

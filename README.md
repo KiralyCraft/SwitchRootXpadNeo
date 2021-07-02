@@ -9,17 +9,5 @@ The driver may install itself under /lib/modules/4.9.140 instead of /lib/modules
 Remember to disable ERTM to pair Xbox One controllers!
 See this: https://gist.github.com/2E0PGS/0166ffec16b1d86acb4ebeea6871b54e
 
-Inspired by: https://gitlab.com/switchroot/kernel/l4t-kernel-build-scripts/tree/test
+Inspired by: https://gitlab.com/switchroot/kernel/l4t-kernel-build-scripts
 
-# This is too complicated, what can I do?
-
-Note, this has only been tested on Bionic, though it should work on whatever has kernel 4.9.140.
-Run this:
-
-```
-cd /lib/modules/4.9.140+/kernel/drivers/hid && sudo wget https://cdn.discordapp.com/attachments/697929296903143494/781616346156367892/hid-xpadneo.ko
-cd /etc/modprobe.d/ && sudo wget https://raw.githubusercontent.com/atar-axis/xpadneo/master/hid-xpadneo/etc-modprobe.d/xpadneo.conf
-cd /etc/udev/rules.d/ && sudo wget https://raw.githubusercontent.com/atar-axis/xpadneo/master/hid-xpadneo/etc-udev-rules.d/98-xpadneo.rules
-sudo depmod
-sudo modprobe hid-xpadneo
-```
